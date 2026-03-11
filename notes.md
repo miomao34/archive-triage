@@ -1,0 +1,23 @@
+what should this app do:
+- [x] read a bookmarks file; flatten (add that to the wiki) the folder structure, and add them to a db one by one, in order
+  - [x] move the db fulfillment into a separate module
+  - [ ] ~~stretch goal/advanced task - some bookmarks are files, eg .pdf or .png - these should either be saved to a key-value storage, or plain to the filesystem, and sent as pics/files.~~
+- [x] go through the links one by one, and ask what to do - discard, snooze, save; two frontends
+  - [ ] tg bot - buttons, saving state into db
+  - [x] tui app - bubbletea/lipgloss
+    - [ ] first ingest the link file into db
+    - [x] link name
+    - [x] link href
+    - [ ] get duplicates, with context
+      - [x] partially done, duplicates are getting got, but the context only works if deleted links are also present in the db - returning to this after ingestion
+    - [ ] paginate duplicates with a paginator
+    - [ ] help text
+    - [ ] stretch goal: basic text from the link
+  - [ ] stretch goal - add N most similar links (maybe if prompted), similar either in name or in link 
+
+  - [ ] if prompted, add context (forward and backward bookmarks)
+  - [ ] if snooze, append that to the end of the list, and maybe mark as "snoozed"
+  - [ ] if discard, just plain delete them from the db/list
+  - [ ] if save, then prompt the link for editing, tags and meta - name, maybe save location, maybe smth else
+- [ ] apply auto-generated meta
+  - [ ] stretch goal/advanced task - if file/pic, then 
