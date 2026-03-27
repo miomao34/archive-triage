@@ -40,8 +40,9 @@ var (
 	duplicateStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("#32965D")).Bold(true)
 	duplicateContextStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#194D30"))
 	helpStyle             = lipgloss.NewStyle().Foreground(lipgloss.Color("#3b3b3b"))
-	// nameStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("#EB9486")).Bold(true).Border(topCellBorder)
-	// linkStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("#F3DE8A")).Border(bottomCellBorder).BorderTop(false)
+
+	// the same color as the cursor in file picker, ANSI 212
+	formatPickerStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff87d7")).Bold(true)
 
 	tagTextAreaStyle = textarea.DefaultStyles(true)
 

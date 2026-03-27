@@ -5,11 +5,11 @@ package main
 // You may also need to run `go mod tidy` to download bubbletea and its
 // dependencies.
 import (
-	"errors"
 	"fmt"
 	linkreader "miomao34/archive-triage/link_reader"
 	"os"
 
+	"charm.land/bubbles/v2/filepicker"
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textarea"
@@ -20,70 +20,84 @@ import (
 const (
 	appStateWelcome = iota
 	appStateTriage
+	appStateIngestPickFile
+	appStateIngestPickFormat
 	appStateHelp
 	appStateTags
 )
 
 type keyMap struct {
-	Back     key.Binding
-	Save     key.Binding
-	Edit     key.Binding
-	Postpone key.Binding
-	Open     key.Binding
-	Discard  key.Binding
-	Context  key.Binding
-	Welcome  key.Binding
-	Help     key.Binding
-	Quit     key.Binding
+	Back           key.Binding
+	Save           key.Binding
+	Edit           key.Binding
+	Postpone       key.Binding
+	ResetPostponed key.Binding
+	Open           key.Binding
+	Ingest         key.Binding
+	Discard        key.Binding
+	Undo           key.Binding
+	Context        key.Binding
+	Welcome        key.Binding
+	Help           key.Binding
+	Quit           key.Binding
 }
 
 type sizes struct {
 	dimensions []int
 
-	linkAndNameLengthLimit int
-	dupeLengthLimit        int
+	topCellWidth    int
+	middleCellWidth int
+	bottomCellWidth int
+
+	topCellHeight    int
+	middleCellHeight int
+	bottomCellHeight int
 
 	numberOfDupesPerPage int
 }
 
 type model struct {
+	id   int
 	link linkreader.Linker
 
 	appState int
 	sizes    sizes
 
-	generator linkreader.LinkGenerator
-	conn      *linkreader.DatabaseConnector
+	conn *linkreader.DatabaseConnector
 
 	selected        map[int]struct{}
 	welcomeMessages map[int]string
 
-	duplicateIDs         []int
-	duplicates           []linkreader.Linker
-	dupeIDNumberOfDigits int
-	scroll               int
+	duplicateIDs []int
+	duplicates   []linkreader.Linker
 
-	textarea textarea.Model
-	err      error
+	stats *linkreader.DatabaseStats
+
+	textarea     textarea.Model
+	filepicker   filepicker.Model
+	selectedFile string
+
+	formats []string
+	cursor  int
+
+	err error
 
 	keys keyMap
 	help help.Model
 }
 
-func initialModel(generator linkreader.LinkGenerator, conn *linkreader.DatabaseConnector) model {
-	err := generator.Run()
-	if err != nil {
-		// hehe
-		log.Fatal("failed to run generator:", "err", err)
-	}
-	log.Debug("started link generator")
-
+func initialModel(conn *linkreader.DatabaseConnector) model {
 	ta := textarea.New()
 	ta.Placeholder = "one tag per line"
 	ta.SetVirtualCursor(false)
 	ta.SetStyles(tagTextAreaStyle)
 
 	// ta.Focus()
+
+	fp := filepicker.New()
+	fp.AllowedTypes = []string{".txt", ".html"}
+	fp.AutoHeight = false
+	fp.CurrentDirectory, _ = os.Getwd()
 
 	var keys = keyMap{
 		Back: key.NewBinding(
@@ -102,13 +116,25 @@ func initialModel(generator linkreader.LinkGenerator, conn *linkreader.DatabaseC
 			key.WithKeys("p"),
 			key.WithHelp("p", "postpone/snooze link"),
 		),
+		ResetPostponed: key.NewBinding(
+			key.WithKeys("r"),
+			key.WithHelp("r", "mark postponed links unprocessed again"),
+		),
 		Open: key.NewBinding(
 			key.WithKeys("o"),
 			key.WithHelp("o", "open link"),
 		),
+		Ingest: key.NewBinding(
+			key.WithKeys("i"),
+			key.WithHelp("i", "ingest a link file"),
+		),
 		Discard: key.NewBinding(
 			key.WithKeys("d"),
 			key.WithHelp("d", "discard link"),
+		),
+		Undo: key.NewBinding(
+			key.WithKeys("u"),
+			key.WithHelp("u", "mark last processed link unprocessed again, delete its tags"),
 		),
 		Context: key.NewBinding(
 			key.WithKeys("c"),
@@ -133,10 +159,10 @@ func initialModel(generator linkreader.LinkGenerator, conn *linkreader.DatabaseC
 	}
 
 	return model{
+		id:   0,
 		link: linkreader.Link{},
 
-		generator: generator,
-		conn:      conn,
+		conn: conn,
 
 		appState: appStateWelcome,
 		sizes:    sizes,
@@ -161,7 +187,17 @@ func initialModel(generator linkreader.LinkGenerator, conn *linkreader.DatabaseC
 `,
 		},
 
-		textarea: ta,
+		stats: &(linkreader.DatabaseStats{}),
+
+		textarea:   ta,
+		filepicker: fp,
+
+		cursor: 0,
+		formats: []string{
+			"ExtensionExportFormat",
+			"BookmarkExportFormat",
+			"FirefoxShareTabsExportFormat",
+		},
 
 		keys: keys,
 		help: help.New(),
@@ -169,17 +205,17 @@ func initialModel(generator linkreader.LinkGenerator, conn *linkreader.DatabaseC
 }
 
 func (m model) Init() tea.Cmd {
-	// Just return `nil`, which means "no I/O right now, please."
-	return nil
+	return m.filepicker.Init()
 }
 
 func (m *model) NextLink() error {
-	newLink, ok := <-m.generator.ReturnChannel
-	if !ok {
-		log.Debug("channel is closed!")
-		return errors.New("channel is closed!")
+	id, newLink, err := m.conn.GetUnresolvedLink()
+	if err != nil {
+		log.Info("no more unresolved links")
+		return err
 	}
 
+	m.id = id
 	m.link = newLink
 	return nil
 }
@@ -188,12 +224,23 @@ func (m *model) SizeCalculations(width int, height int) {
 	m.sizes.dimensions[0], m.sizes.dimensions[1] = width, height
 
 	// 2 spaces for borders
-	m.sizes.linkAndNameLengthLimit = m.sizes.dimensions[0] - 2
-	m.sizes.dupeLengthLimit = m.sizes.dimensions[0] - 2
+	m.sizes.topCellWidth = m.sizes.dimensions[0] - 2
+	m.sizes.middleCellWidth = m.sizes.dimensions[0] - 2
+	m.sizes.bottomCellWidth = m.sizes.dimensions[0] - 2
+
+	// 2, one for link and one for name
+	m.sizes.topCellHeight = 2
+	// 4 for borders, 2 for top cell, 1 for bottom cell
+	m.sizes.middleCellHeight = m.sizes.dimensions[1] - 4 - 2 - 1
+	m.sizes.bottomCellHeight = 1
 
 	// 3 for all borders, 2 for current name and link
 	// 1 dupe is 4 characters high
 	m.sizes.numberOfDupesPerPage = (m.sizes.dimensions[1] - 3 - 2) / 4
+
+	// idk why this 1 is necessary
+	// fixme move me someplace else
+	m.filepicker.SetHeight(m.sizes.middleCellHeight - 2)
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -213,6 +260,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return UpdateWelcome(&m, msg)
 	case appStateTriage:
 		return UpdateTriage(&m, msg)
+	case appStateIngestPickFile:
+		return UpdateIngestPickFile(&m, msg)
+	case appStateIngestPickFormat:
+		return UpdateIngestPickFormat(&m, msg)
 	case appStateTags:
 		return UpdateTags(&m, msg)
 	}
@@ -226,6 +277,10 @@ func (m model) View() tea.View {
 		return ViewWelcome(&m)
 	case appStateTriage:
 		return ViewTriage(&m)
+	case appStateIngestPickFile:
+		return ViewIngestPickFile(&m)
+	case appStateIngestPickFormat:
+		return ViewIngestPickFormat(&m)
 	case appStateTags:
 		return ViewTags(&m)
 	}
@@ -237,16 +292,23 @@ func (m model) View() tea.View {
 }
 
 func main() {
-	log.SetLevel(log.DebugLevel)
-	log.Debug("starting!")
+	f, err := os.OpenFile("log.txt", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o644)
+	if err != nil {
+		log.Fatal("failed to open logging to file! da hell", "err", err)
+	}
+	log.SetOutput(f)
 
-	if len(os.Args) < 4 {
-		log.Fatal(`usage:
-						./archive-triage <format> <input-filename> <output-db-filename>)
-						format - one of: bookmark, extension, firefox`)
+	// log.SetFormatter(log.LogfmtFormatter)
+	log.SetLevel(log.DebugLevel)
+	log.Debug(">>>>starting!<<<<")
+
+	if len(os.Args) < 2 {
+		fmt.Println(`usage:
+		./archive-triage <db-filename>`)
+		os.Exit(1)
 	}
 
-	dbFilename := os.Args[3]
+	dbFilename := os.Args[1]
 	conn, err := linkreader.OpenConnection(dbFilename)
 	if err != nil {
 		log.Fatal("failed to open db connection:", "err", err)
@@ -258,30 +320,7 @@ func main() {
 		}
 	}()
 
-	log.Debug("opened db connection", "dbFilename", dbFilename)
-
-	formatString := os.Args[1]
-	var format linkreader.LinkFileFormatType
-	filename := os.Args[2]
-	switch formatString {
-	case "bookmark":
-		format = linkreader.BookmarkExportFormat
-	case "extension":
-		format = linkreader.ExtensionExportFormat
-	case "firefox":
-		format = linkreader.FirefoxShareTabsExportFormat
-	default:
-		log.Fatal("format should be one of: bookmark, extension, firefox")
-	}
-	generator := linkreader.LinkGenerator{}
-	err = generator.ReadBookmarksFile(filename, format)
-	if err != nil {
-		// haha
-		log.Fatal("failed to create generator:", "err", err)
-	}
-	log.Debug("created link generator")
-
-	p := tea.NewProgram(initialModel(generator, conn))
+	p := tea.NewProgram(initialModel(conn))
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("Alas, there's been an error: %v", err)
 		os.Exit(1)

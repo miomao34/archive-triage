@@ -3,9 +3,15 @@ what should this app do:
   - [x] move the db fulfillment into a separate module
   - [ ] ~~stretch goal/advanced task - some bookmarks are files, eg .pdf or .png - these should either be saved to a key-value storage, or plain to the filesystem, and sent as pics/files.~~
 - [x] go through the links one by one, and ask what to do - discard, snooze, save; two frontends
-  - [ ] tg bot - buttons, saving state into db
+  - [ ] tg bot - buttons, saving state into db - not sure 
   - [x] tui app - bubbletea/lipgloss
-    - [ ] first ingest the link file into db
+      - [x] replace the generator with an sql request
+        - [x] make the request
+        - [x] cover edge cases - when the db file is empty it should prompt to ingest
+      - [ ] plan out the lifetime of a link, how it looks (does it need id inside of the structure?), how it changes on app actions, how context of dupes works, some better sql queries and maybe better work with the sqlite.
+    - [ ] make ingestion menu
+      - [x] file picker (this darn thang drank a liter of my blood)
+      - [x] format selector - select format from a list and begin ingestion
     - [x] link name
     - [x] link href
     - [ ] get duplicates, with context

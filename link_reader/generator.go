@@ -34,6 +34,14 @@ func (l Link) GetHREF() []byte {
 	return l.href
 }
 
+func (l *Link) SetName(name []byte) {
+	l.name = name
+}
+
+func (l *Link) SetHREF(href []byte) {
+	l.href = href
+}
+
 type Linker interface {
 	GetName() []byte
 	GetHREF() []byte

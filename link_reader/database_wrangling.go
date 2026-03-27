@@ -11,8 +11,6 @@ type DatabaseConnector struct {
 	db *sql.DB
 }
 
-type DatabaseStats struct{}
-
 type LinkResolution int
 
 const (
@@ -21,6 +19,13 @@ const (
 	LinkSaved
 	LinkSnoozed
 )
+
+type DatabaseStats struct {
+	Unprocessed int
+	Dismissed   int
+	Saved       int
+	Snoozed     int
+}
 
 func OpenConnection(filename string) (*DatabaseConnector, error) {
 	conn := DatabaseConnector{}
@@ -80,6 +85,34 @@ func (conn *DatabaseConnector) Close() error {
 	return err
 }
 
+func (conn *DatabaseConnector) GetStats() (*DatabaseStats, error) {
+	tx, err := conn.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Commit()
+
+	query, err := tx.Prepare(`SELECT SUM(CASE WHEN resolution = ? THEN 1 ELSE 0 END) as unprocessed,
+									 SUM(CASE WHEN resolution = ? THEN 1 ELSE 0 END) as dismissed,
+									 SUM(CASE WHEN resolution = ? THEN 1 ELSE 0 END) as saved,
+									 SUM(CASE WHEN resolution = ? THEN 1 ELSE 0 END) as snoozed
+		FROM links`)
+	if err != nil {
+		return nil, err
+	}
+	defer query.Close()
+
+	row := query.QueryRow(LinkUnprocessed, LinkDismissed, LinkSaved, LinkSnoozed)
+
+	var stats DatabaseStats
+	err = row.Scan(&(stats.Unprocessed), &(stats.Dismissed), &(stats.Saved), &(stats.Snoozed))
+	if err != nil {
+		return nil, err
+	}
+
+	return &stats, nil
+}
+
 func (conn *DatabaseConnector) InsertLink(link Linker) (int, error) {
 	tx, err := conn.db.Begin()
 	if err != nil {
@@ -105,6 +138,52 @@ func (conn *DatabaseConnector) InsertLink(link Linker) (int, error) {
 	return int(returned_id), nil
 }
 
+func (conn *DatabaseConnector) GetUnresolvedLink() (int, Linker, error) {
+	tx, err := conn.db.Begin()
+	if err != nil {
+		return -1, nil, err
+	}
+	defer tx.Commit()
+
+	query, err := tx.Prepare("SELECT id, name, link FROM links WHERE resolution = ? LIMIT 1;")
+	if err != nil {
+		return -1, nil, err
+	}
+	defer query.Close()
+
+	row := query.QueryRow(LinkUnprocessed)
+
+	var id int
+	var link Link
+	err = row.Scan(&id, &(link.name), &(link.href))
+	if err != nil {
+		return -1, nil, err
+	}
+
+	return id, link, nil
+}
+
+func (conn *DatabaseConnector) ResetSnoozedLinks() error {
+	tx, err := conn.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Commit()
+
+	query, err := tx.Prepare("UPDATE links SET resolution = ? WHERE resolution = ?;")
+	if err != nil {
+		return err
+	}
+	defer query.Close()
+
+	_, err = query.Exec(LinkUnprocessed, LinkSnoozed)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (conn *DatabaseConnector) GetSimilarLinks(link Linker) ([]int, []Linker, error) {
 	tx, err := conn.db.Begin()
 	if err != nil {
@@ -112,13 +191,13 @@ func (conn *DatabaseConnector) GetSimilarLinks(link Linker) ([]int, []Linker, er
 	}
 	defer tx.Commit()
 
-	query, err := tx.Prepare("SELECT id, name, link FROM links WHERE link LIKE CONCAT(?, '%');")
+	query, err := tx.Prepare("SELECT id, name, link FROM links WHERE link LIKE CONCAT(?, '%') AND resolution NOT IN (?, ?);")
 	if err != nil {
 		return nil, nil, err
 	}
 	defer query.Close()
 
-	rows, err := query.Query(string(link.GetHREF()))
+	rows, err := query.Query(string(link.GetHREF()), LinkUnprocessed, LinkDismissed)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -210,25 +289,29 @@ func (conn *DatabaseConnector) MarkLinkById(id int, resolution LinkResolution) e
 	return nil
 }
 
-func (conn *DatabaseConnector) MarkLastLink(resolution LinkResolution) error {
+// used for undo - looks for the last marked link, then unmarks it.
+// also returns the id of the unmarked link. if none links are marked, returns err
+func (conn *DatabaseConnector) UnmarkLastLink() (int, error) {
 	tx, err := conn.db.Begin()
 	if err != nil {
-		return err
+		return -1, err
 	}
 	defer tx.Commit()
 
-	query, err := tx.Prepare("UPDATE links SET resolution = ? ORDER id DESC LIMIT 1;")
+	query, err := tx.Prepare("UPDATE links SET resolution = ? WHERE id = (SELECT id FROM links WHERE resolution != ? ORDER BY id DESC LIMIT 1) RETURNING id;")
 	if err != nil {
-		return err
+		return -1, err
 	}
 	defer query.Close()
 
-	_, err = query.Exec(resolution)
+	result := query.QueryRow(LinkUnprocessed, LinkUnprocessed)
+	var id int
+	err = result.Scan(&id)
 	if err != nil {
-		return err
+		return -1, err
 	}
 
-	return nil
+	return id, nil
 }
 
 func (conn *DatabaseConnector) TagLink(link_id int, tag_name string) error {
@@ -257,6 +340,60 @@ func (conn *DatabaseConnector) TagLink(link_id int, tag_name string) error {
 
 	query, err = tx.Prepare("INSERT INTO tags (link_id, tag_id) VALUES (?, ?);")
 	_, err = query.Exec(link_id, tag_id)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (conn *DatabaseConnector) UntagLink(link_id int) error {
+	// log.Debug("trying to apply a tag", "tag_name", tag_name)
+	tx, err := conn.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Commit()
+
+	query, err := tx.Prepare("DELETE FROM tags WHERE link_id = ?;")
+	if err != nil {
+		return err
+	}
+	defer query.Close()
+
+	_, err = query.Exec(link_id)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (conn *DatabaseConnector) MarkLinkSource(link_id int, source string) error {
+	// log.Debug("trying to apply a tag", "tag_name", tag_name)
+	tx, err := conn.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Commit()
+
+	query, err := tx.Prepare("INSERT INTO sources (name) VALUES (?) ON CONFLICT DO NOTHING;")
+	if err != nil {
+		return err
+	}
+	defer query.Close()
+
+	_, err = query.Exec(source)
+	if err != nil {
+		return err
+	}
+	query, err = tx.Prepare("SELECT id FROM sources ORDER BY id DESC LIMIT 1;")
+	row := query.QueryRow()
+	var sourceID int
+	row.Scan(&sourceID)
+
+	query, err = tx.Prepare("UPDATE links SET source_id = ? WHERE id = ?;")
+	_, err = query.Exec(sourceID, link_id)
 	if err != nil {
 		return err
 	}

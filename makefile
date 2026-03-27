@@ -1,2 +1,11 @@
 all:
-	CGO_ENABLED=1 go run . extension 20260216T184343+0300_ExportTabsURLs.txt waow.db
+	CGO_ENABLED=1 go run . real.db
+
+test:
+	CGO_ENABLED=1 go run . waow.db
+
+build:
+	CGO_ENABLED=1 go build .
+
+run: build
+	./archive-triage real.db
