@@ -4,7 +4,6 @@ import (
 	"fmt"
 	linkreader "miomao34/archive-triage/link_reader"
 
-	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
@@ -192,14 +191,4 @@ func ViewTags(m *model) tea.View {
 	view.Cursor = c
 
 	return view
-}
-
-// FullHelp returns keybindings for the expanded help view. It's part of the
-// key.Map interface.
-func (k keyMap) FullHelp() [][]key.Binding {
-	// columns
-	return [][]key.Binding{
-		{k.Back, k.Save, k.Postpone, k.Discard}, // first column
-		{k.Context, k.Help, k.Quit},             // second column
-	}
 }

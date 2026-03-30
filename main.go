@@ -1,9 +1,5 @@
 package main
 
-// These imports will be used later on the tutorial. If you save the file
-// now, Go might complain they are unused, but that's fine.
-// You may also need to run `go mod tidy` to download bubbletea and its
-// dependencies.
 import (
 	"fmt"
 	linkreader "miomao34/archive-triage/link_reader"
@@ -22,12 +18,10 @@ const (
 	appStateTriage
 	appStateIngestPickFile
 	appStateIngestPickFormat
-	appStateHelp
 	appStateTags
 )
 
 type keyMap struct {
-	Back           key.Binding
 	Save           key.Binding
 	Edit           key.Binding
 	Postpone       key.Binding
@@ -36,9 +30,7 @@ type keyMap struct {
 	Ingest         key.Binding
 	Discard        key.Binding
 	Undo           key.Binding
-	Context        key.Binding
 	Welcome        key.Binding
-	Help           key.Binding
 	Quit           key.Binding
 }
 
@@ -100,10 +92,6 @@ func initialModel(conn *linkreader.DatabaseConnector) model {
 	fp.CurrentDirectory, _ = os.Getwd()
 
 	var keys = keyMap{
-		Back: key.NewBinding(
-			key.WithKeys("b"),
-			key.WithHelp("b", "go back"),
-		),
 		Save: key.NewBinding(
 			key.WithKeys("s"),
 			key.WithHelp("s", "save link"),
@@ -136,17 +124,9 @@ func initialModel(conn *linkreader.DatabaseConnector) model {
 			key.WithKeys("u"),
 			key.WithHelp("u", "mark last processed link unprocessed again, delete its tags"),
 		),
-		Context: key.NewBinding(
-			key.WithKeys("c"),
-			key.WithHelp("c", "increase link context window"),
-		),
 		Welcome: key.NewBinding(
 			key.WithKeys("w"),
 			key.WithHelp("w", "go to the splash screen"),
-		),
-		Help: key.NewBinding(
-			key.WithKeys("?"),
-			key.WithHelp("?", "toggle help"),
 		),
 		Quit: key.NewBinding(
 			key.WithKeys("q", "esc", "ctrl+c"),

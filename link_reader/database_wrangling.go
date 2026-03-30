@@ -92,10 +92,10 @@ func (conn *DatabaseConnector) GetStats() (*DatabaseStats, error) {
 	}
 	defer tx.Commit()
 
-	query, err := tx.Prepare(`SELECT SUM(CASE WHEN resolution = ? THEN 1 ELSE 0 END) as unprocessed,
-									 SUM(CASE WHEN resolution = ? THEN 1 ELSE 0 END) as dismissed,
-									 SUM(CASE WHEN resolution = ? THEN 1 ELSE 0 END) as saved,
-									 SUM(CASE WHEN resolution = ? THEN 1 ELSE 0 END) as snoozed
+	query, err := tx.Prepare(`SELECT COALESCE(SUM(CASE WHEN resolution = ? THEN 1 ELSE 0 END), 0) as unprocessed,
+									 COALESCE(SUM(CASE WHEN resolution = ? THEN 1 ELSE 0 END), 0) as dismissed,
+									 COALESCE(SUM(CASE WHEN resolution = ? THEN 1 ELSE 0 END), 0) as saved,
+									 COALESCE(SUM(CASE WHEN resolution = ? THEN 1 ELSE 0 END), 0) as snoozed
 		FROM links`)
 	if err != nil {
 		return nil, err

@@ -74,10 +74,6 @@ func UpdateTriage(m *model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.appState = appStateIngestPickFile
 			UpdateIngestPickFile(m, nil)
 
-		case key.Matches(msg, m.keys.Help):
-			log.Info("switching to help (one day)")
-			m.appState = appStateHelp
-
 		case key.Matches(msg, m.keys.Welcome):
 			log.Info("switching to welcome")
 			m.appState = appStateWelcome

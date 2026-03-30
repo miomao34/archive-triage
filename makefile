@@ -2,7 +2,7 @@ all:
 	CGO_ENABLED=1 go run . real.db
 
 test:
-	CGO_ENABLED=1 go run . waow.db
+	CGO_ENABLED=1 go run . demo.db
 
 build:
 	CGO_ENABLED=1 go build .
