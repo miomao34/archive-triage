@@ -1,7 +1,7 @@
 # archive-triage
 A Go tool to sort and file links with
 
-![demo.mp4](demo/demo.mp4)
+![demo.gif](demo/demo.gif)
 
 Controls:
 | key | description                                                       |
