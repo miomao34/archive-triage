@@ -27,12 +27,6 @@ func UpdateWelcome(m *model, msg tea.Msg) (tea.Model, tea.Cmd) {
 			log.Info("switching to triage")
 			m.appState = appStateTriage
 			UpdateTriage(m, nil)
-
-			var err error
-			m.duplicateIDs, m.duplicates, err = m.conn.GetSimilarLinks(m.link)
-			if err != nil {
-				log.Debug("failed to get mf dupes", "err", err)
-			}
 		}
 	}
 	// necessary for the file picker to work; spent solid 6hrs debugging it
@@ -49,7 +43,10 @@ func UpdateTriage(m *model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		newLink.SetHREF([]byte("press i to ingest a new file, or r to reset postponed links"))
 		m.link = newLink
 	}
+
 	m.duplicateIDs, m.duplicates, err = m.conn.GetSimilarLinks(m.link)
+	m.paginator.SetTotalPages(len(m.duplicates))
+	m.paginator.Page = 0
 	if err != nil {
 		log.Error("failed to get mf dupes", "err", err)
 	}
@@ -58,6 +55,9 @@ func UpdateTriage(m *model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	if err != nil {
 		log.Error("failed to get stats", "err", err)
 	}
+
+	var cmd tea.Cmd
+	m.paginator, cmd = m.paginator.Update(msg)
 
 	switch msg := msg.(type) {
 
@@ -128,7 +128,7 @@ func UpdateTriage(m *model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	return m, nil
+	return m, cmd
 }
 
 func UpdateIngestPickFile(m *model, msg tea.Msg) (tea.Model, tea.Cmd) {

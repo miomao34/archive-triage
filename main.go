@@ -8,6 +8,7 @@ import (
 	"charm.land/bubbles/v2/filepicker"
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/paginator"
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/log"
@@ -23,12 +24,13 @@ const (
 
 type keyMap struct {
 	Save           key.Binding
-	Edit           key.Binding
 	Postpone       key.Binding
 	ResetPostponed key.Binding
 	Open           key.Binding
 	Ingest         key.Binding
 	Discard        key.Binding
+	Left           key.Binding
+	Right          key.Binding
 	Undo           key.Binding
 	Welcome        key.Binding
 	Quit           key.Binding
@@ -44,8 +46,6 @@ type sizes struct {
 	topCellHeight    int
 	middleCellHeight int
 	bottomCellHeight int
-
-	numberOfDupesPerPage int
 }
 
 type model struct {
@@ -62,6 +62,8 @@ type model struct {
 
 	duplicateIDs []int
 	duplicates   []linkreader.Linker
+
+	paginator paginator.Model
 
 	stats *linkreader.DatabaseStats
 
@@ -96,10 +98,6 @@ func initialModel(conn *linkreader.DatabaseConnector) model {
 			key.WithKeys("s"),
 			key.WithHelp("s", "save link"),
 		),
-		Edit: key.NewBinding(
-			key.WithKeys("e"),
-			key.WithHelp("e", "edit link"),
-		),
 		Postpone: key.NewBinding(
 			key.WithKeys("p"),
 			key.WithHelp("p", "postpone/snooze link"),
@@ -120,6 +118,14 @@ func initialModel(conn *linkreader.DatabaseConnector) model {
 			key.WithKeys("d"),
 			key.WithHelp("d", "discard link"),
 		),
+		Left: key.NewBinding(
+			key.WithKeys("h", "left", "<"),
+			key.WithHelp("h/left/<", "prev duplicates page"),
+		),
+		Right: key.NewBinding(
+			key.WithKeys("l", "right", ">"),
+			key.WithHelp("l/right/>", "next duplicates page"),
+		),
 		Undo: key.NewBinding(
 			key.WithKeys("u"),
 			key.WithHelp("u", "mark last processed link unprocessed again, delete its tags"),
@@ -133,6 +139,11 @@ func initialModel(conn *linkreader.DatabaseConnector) model {
 			key.WithHelp("q/esc/ctrl-c", "quit"),
 		),
 	}
+
+	p := paginator.New()
+	p.Type = paginator.Dots
+	p.ActiveDot = activeDot.String()
+	p.InactiveDot = inactiveDot.String()
 
 	sizes := sizes{
 		dimensions: make([]int, 2),
@@ -166,6 +177,8 @@ func initialModel(conn *linkreader.DatabaseConnector) model {
                           /____/       
 `,
 		},
+
+		paginator: p,
 
 		stats: &(linkreader.DatabaseStats{}),
 
@@ -214,9 +227,8 @@ func (m *model) SizeCalculations(width int, height int) {
 	m.sizes.middleCellHeight = m.sizes.dimensions[1] - 4 - 2 - 1
 	m.sizes.bottomCellHeight = 1
 
-	// 3 for all borders, 2 for current name and link
-	// 1 dupe is 4 characters high
-	m.sizes.numberOfDupesPerPage = (m.sizes.dimensions[1] - 3 - 2) / 4
+	// 1 line for the paginator dots
+	m.paginator.PerPage = m.sizes.middleCellHeight - 1
 
 	// idk why this 1 is necessary
 	// fixme move me someplace else
@@ -272,7 +284,7 @@ func (m model) View() tea.View {
 }
 
 func main() {
-	f, err := os.OpenFile("log.txt", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o644)
+	f, err := os.OpenFile("log.txt", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o666)
 	if err != nil {
 		log.Fatal("failed to open logging to file! da hell", "err", err)
 	}

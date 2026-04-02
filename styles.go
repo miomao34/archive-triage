@@ -20,8 +20,6 @@ var (
 		Bottom:      "─",
 		Left:        "│",
 		Right:       "│",
-		TopLeft:     "├",
-		TopRight:    "┤",
 		BottomLeft:  "├",
 		BottomRight: "┤",
 	}
@@ -49,4 +47,8 @@ var (
 	topCellStyle    = lipgloss.NewStyle().Border(topCellBorder)
 	middleCellStyle = lipgloss.NewStyle().Border(middleCellBorder).BorderTop(false)
 	bottomCellStyle = lipgloss.NewStyle().Border(bottomCellBorder).BorderTop(false)
+
+	// paginator dots styles
+	activeDot   = lipgloss.NewStyle().Foreground(lipgloss.Color("252")).SetString("•")
+	inactiveDot = lipgloss.NewStyle().Foreground(lipgloss.Color("238")).SetString("•")
 )

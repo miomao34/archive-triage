@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/log"
 )
 
 func getCulledString(str string, length int) string {
@@ -20,14 +21,16 @@ func getCulledString(str string, length int) string {
 
 func getStatusString(stats linkreader.DatabaseStats, width int) string {
 
-	statString := fmt.Sprintf("unprocessed: %v, dismissed: %v, saved: %v, postponed: %v",
-		stats.Unprocessed,
-		stats.Dismissed,
-		stats.Saved,
-		stats.Snoozed,
-	)
+	var statString string
 	if len(statString) > width {
 		statString = fmt.Sprintf("U: %v, D: %v, S: %v, P: %v",
+			stats.Unprocessed,
+			stats.Dismissed,
+			stats.Saved,
+			stats.Snoozed,
+		)
+	} else {
+		statString = fmt.Sprintf("unprocessed: %v, dismissed: %v, saved: %v, postponed: %v",
 			stats.Unprocessed,
 			stats.Dismissed,
 			stats.Saved,
@@ -58,41 +61,47 @@ func ViewTriage(m *model) tea.View {
 		Render(getCulledString(string(m.link.GetHREF()), m.sizes.topCellWidth))
 	nameAndLinkDisplay := lipgloss.JoinVertical(lipgloss.Left, nameView, linkView)
 
-	var dupesView string
+	dupesView := m.paginator.View()
 
 	if len(m.duplicateIDs) == 0 {
 		dupesView = duplicateStyle.Width(m.sizes.middleCellWidth).Height(m.sizes.middleCellHeight).Render("no duplicates found!")
-	}
+	} else {
+		start, end := m.paginator.GetSliceBounds(len(m.duplicates))
+		log.Debug("slice bounds", "start", start, "end", end)
 
-	for dupeID := range m.duplicateIDs {
-		dupeLink := m.duplicates[dupeID]
+		for orderID, dupeLink := range m.duplicates[start:end] {
+			dupeID := m.duplicateIDs[orderID+start]
 
-		// -10 bc all the other characters take 10 spaces
-		// /2 since we should fit both the name and the link
-		// all the other math to adjust if the name is shorter
-		nameOrLinkDefaultLength := (m.sizes.bottomCellWidth - 10) / 2
-		dupeNameLength := min(nameOrLinkDefaultLength, len(dupeLink.GetName()))
-		dupeLinkLength := nameOrLinkDefaultLength*2 - dupeNameLength
+			// -10 bc all the other characters take 10 spaces
+			// /2 since we should fit both the name and the link
+			// all the other math to adjust if the name is shorter
+			nameOrLinkDefaultLength := (m.sizes.bottomCellWidth - 10) / 2
+			dupeNameLength := min(nameOrLinkDefaultLength, len(dupeLink.GetName()))
+			dupeLinkLength := nameOrLinkDefaultLength*2 - dupeNameLength
 
-		dupeString := fmt.Sprintf("%04v | %v | %v",
-			dupeID,
-			getCulledString(string(dupeLink.GetName()), dupeNameLength),
-			getCulledString(string(dupeLink.GetHREF()), dupeLinkLength),
-		)
-		dupeView := duplicateStyle.Width(m.sizes.middleCellWidth).Height(m.sizes.middleCellHeight).Render(dupeString)
-		if dupesView == "" {
-			dupesView = dupeView
-		} else {
-			dupesView = lipgloss.JoinVertical(lipgloss.Left, dupesView, dupeView)
+			dupeString := fmt.Sprintf("%04v | %v | %v",
+				dupeID,
+				getCulledString(string(dupeLink.GetName()), dupeNameLength),
+				getCulledString(string(dupeLink.GetHREF()), dupeLinkLength),
+			)
+			dupeView := duplicateStyle.Width(m.sizes.middleCellWidth).UnsetHeight().Render(dupeString)
+			if dupesView == "" {
+				dupesView = dupeView
+			} else {
+				dupesView = lipgloss.JoinVertical(lipgloss.Left, dupesView, dupeView)
+			}
 		}
 	}
+
+	// duplicatesBeginID := m.sizes.middleCellHeight * m.currentDuplicatesPage
+	// duplicatesEndID := min(len(m.duplicates), m.sizes.middleCellHeight*(m.currentDuplicatesPage+1))
 
 	statsView := getStatusString(*m.stats, m.sizes.bottomCellWidth)
 
 	view := tea.NewView(lipgloss.JoinVertical(
 		lipgloss.Left,
 		topCellStyle.Render(nameAndLinkDisplay),
-		middleCellStyle.Render(dupesView),
+		middleCellStyle.Height(m.sizes.middleCellHeight+1).Render(dupesView),
 		bottomCellStyle.Render(statsView),
 	))
 	view.AltScreen = true
