@@ -27,10 +27,9 @@ type keyMap struct {
 	Postpone       key.Binding
 	ResetPostponed key.Binding
 	Open           key.Binding
+	Copy           key.Binding
 	Ingest         key.Binding
 	Discard        key.Binding
-	Left           key.Binding
-	Right          key.Binding
 	Undo           key.Binding
 	Welcome        key.Binding
 	Quit           key.Binding
@@ -110,6 +109,10 @@ func initialModel(conn *linkreader.DatabaseConnector) model {
 			key.WithKeys("o"),
 			key.WithHelp("o", "open link"),
 		),
+		Copy: key.NewBinding(
+			key.WithKeys("c"),
+			key.WithHelp("c", "copy link"),
+		),
 		Ingest: key.NewBinding(
 			key.WithKeys("i"),
 			key.WithHelp("i", "ingest a link file"),
@@ -117,14 +120,6 @@ func initialModel(conn *linkreader.DatabaseConnector) model {
 		Discard: key.NewBinding(
 			key.WithKeys("d"),
 			key.WithHelp("d", "discard link"),
-		),
-		Left: key.NewBinding(
-			key.WithKeys("h", "left", "<"),
-			key.WithHelp("h/left/<", "prev duplicates page"),
-		),
-		Right: key.NewBinding(
-			key.WithKeys("l", "right", ">"),
-			key.WithHelp("l/right/>", "next duplicates page"),
 		),
 		Undo: key.NewBinding(
 			key.WithKeys("u"),

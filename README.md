@@ -13,6 +13,7 @@ Controls:
 | p   | postpone link                                                     |
 | r   | reset postponed links                                             |
 | o   | open current link                                                 |
+| c   | copy current link to clipboard                                    |
 | w   | go back to the welcome screen                                     |
 | q   | quit                                                              |
 

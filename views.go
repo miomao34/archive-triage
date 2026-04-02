@@ -21,16 +21,14 @@ func getCulledString(str string, length int) string {
 
 func getStatusString(stats linkreader.DatabaseStats, width int) string {
 
-	var statString string
+	statString := fmt.Sprintf("unprocessed: %v, dismissed: %v, saved: %v, postponed: %v",
+		stats.Unprocessed,
+		stats.Dismissed,
+		stats.Saved,
+		stats.Snoozed,
+	)
 	if len(statString) > width {
 		statString = fmt.Sprintf("U: %v, D: %v, S: %v, P: %v",
-			stats.Unprocessed,
-			stats.Dismissed,
-			stats.Saved,
-			stats.Snoozed,
-		)
-	} else {
-		statString = fmt.Sprintf("unprocessed: %v, dismissed: %v, saved: %v, postponed: %v",
 			stats.Unprocessed,
 			stats.Dismissed,
 			stats.Saved,

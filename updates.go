@@ -4,13 +4,68 @@ import (
 	"database/sql"
 	"errors"
 	linkreader "miomao34/archive-triage/link_reader"
+	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/log"
 )
+
+// code for wayland, macos and windows is largely placeholder but
+// might work; more testing is needed
+func copyToClipboard(link []byte) error {
+	switch runtime.GOOS {
+	case "linux":
+		sessionType, ok := os.LookupEnv("XDG_SESSION_TYPE")
+		switch {
+		case sessionType == "x11":
+			command := exec.Command("xclip", "-selection", "clipboard")
+			stdin, err := command.StdinPipe()
+			if err != nil {
+				return err
+			}
+			err = command.Start()
+			if err != nil {
+				return err
+			}
+			n, err := stdin.Write(link)
+			if err != nil {
+				return err
+			}
+			if n != len(link) {
+				return errors.New("failed to write the whole link")
+			}
+			err = stdin.Close()
+			if err != nil {
+				return err
+			}
+			err = command.Wait()
+			if err != nil {
+				return err
+			}
+		case sessionType == "wayland":
+			cmd := exec.Command("wl-copy", string(link))
+			cmd.Start()
+			cmd.Wait()
+		case !ok:
+			fallthrough
+		default:
+			log.Error("you're on your own here")
+		}
+	case "darwin":
+		exec.Command("echo", string(link), "|", "pbcopy").Start()
+	case "windows":
+		exec.Command("echo", string(link), "|", "clip").Start()
+
+	default:
+		log.Error("you're on your own here")
+	}
+
+	return nil
+}
 
 func UpdateWelcome(m *model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -122,6 +177,13 @@ func UpdateTriage(m *model, msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case key.Matches(msg, m.keys.Open):
 			exec.Command("xdg-open", string(m.link.GetHREF())).Start()
+
+		case key.Matches(msg, m.keys.Copy):
+			log.Debug("copying the link")
+			err := copyToClipboard(m.link.GetHREF())
+			if err != nil {
+				log.Error("failed to copy link", "err", err)
+			}
 
 		case key.Matches(msg, m.keys.Quit):
 			return m, tea.Quit
