@@ -1,6 +1,6 @@
 module miomao34/archive-triage
 
-go 1.24.2
+go 1.26.2
 
 require (
 	charm.land/bubbles/v2 v2.0.0
