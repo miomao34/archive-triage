@@ -7,6 +7,7 @@ Controls:
 | key | description                                                       |
 | --- | ----------------------------------------------------------------- |
 | i   | ingest a link file; up/down and enter to choose a file and format |
+| e   | export links into a file                                          |
 | s   | mark link as saved; input tags then press escape                  |
 | d   | dismiss link                                                      |
 | u   | undo last action                                                  |

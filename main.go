@@ -10,6 +10,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/paginator"
 	"charm.land/bubbles/v2/textarea"
+	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/log"
 )
@@ -20,6 +21,9 @@ const (
 	appStateIngestPickFile
 	appStateIngestPickFormat
 	appStateTags
+	appStateExportSelectFormat
+	appStateExportMarkdown
+	appStateExportBookmarks
 )
 
 type keyMap struct {
@@ -29,6 +33,7 @@ type keyMap struct {
 	Open           key.Binding
 	Copy           key.Binding
 	Ingest         key.Binding
+	Export         key.Binding
 	Discard        key.Binding
 	Undo           key.Binding
 	Welcome        key.Binding
@@ -66,12 +71,14 @@ type model struct {
 
 	stats *linkreader.DatabaseStats
 
-	textarea     textarea.Model
+	textArea     textarea.Model
+	textInput    textinput.Model
 	filepicker   filepicker.Model
 	selectedFile string
 
-	formats []string
-	cursor  int
+	cursor        int
+	importFormats []string
+	exportFormats []string
 
 	err error
 
@@ -92,6 +99,11 @@ func initialModel(conn *linkreader.DatabaseConnector) model {
 	fp.AutoHeight = false
 	fp.CurrentDirectory, _ = os.Getwd()
 
+	ti := textinput.New()
+	ti.SetVirtualCursor(false)
+	// ti.Focus()
+	// ti.SetWidth(32)
+
 	var keys = keyMap{
 		Save: key.NewBinding(
 			key.WithKeys("s"),
@@ -103,7 +115,7 @@ func initialModel(conn *linkreader.DatabaseConnector) model {
 		),
 		ResetPostponed: key.NewBinding(
 			key.WithKeys("r"),
-			key.WithHelp("r", "mark postponed links unprocessed again"),
+			key.WithHelp("r", "reset postponed links to unprocessed"),
 		),
 		Open: key.NewBinding(
 			key.WithKeys("o"),
@@ -116,6 +128,10 @@ func initialModel(conn *linkreader.DatabaseConnector) model {
 		Ingest: key.NewBinding(
 			key.WithKeys("i"),
 			key.WithHelp("i", "ingest a link file"),
+		),
+		Export: key.NewBinding(
+			key.WithKeys("e"),
+			key.WithHelp("e", "export links into a file"),
 		),
 		Discard: key.NewBinding(
 			key.WithKeys("d"),
@@ -177,14 +193,22 @@ func initialModel(conn *linkreader.DatabaseConnector) model {
 
 		stats: &(linkreader.DatabaseStats{}),
 
-		textarea:   ta,
+		// text area for tag entry
+		textArea: ta,
+		// file picker for file ingestion
 		filepicker: fp,
+		// text area for filename for export
+		textInput: ti,
 
 		cursor: 0,
-		formats: []string{
-			"ExtensionExportFormat",
-			"BookmarkExportFormat",
-			"FirefoxShareTabsExportFormat",
+		importFormats: []string{
+			"ExtensionImportFormat",
+			"BookmarkImportFormat",
+			"FirefoxShareTabsImportFormat",
+		},
+		exportFormats: []string{
+			"Markdown",
+			"Bookmarks",
 		},
 
 		keys: keys,
@@ -251,6 +275,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return UpdateIngestPickFile(&m, msg)
 	case appStateIngestPickFormat:
 		return UpdateIngestPickFormat(&m, msg)
+	case appStateExportSelectFormat:
+		return UpdateExportPickFormat(&m, msg)
+	case appStateExportBookmarks, appStateExportMarkdown:
+		return UpdateExport(&m, msg)
 	case appStateTags:
 		return UpdateTags(&m, msg)
 	}
@@ -268,6 +296,10 @@ func (m model) View() tea.View {
 		return ViewIngestPickFile(&m)
 	case appStateIngestPickFormat:
 		return ViewIngestPickFormat(&m)
+	case appStateExportSelectFormat:
+		return ViewExportPickFormat(&m)
+	case appStateExportBookmarks, appStateExportMarkdown:
+		return ViewExport(&m)
 	case appStateTags:
 		return ViewTags(&m)
 	}

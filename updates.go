@@ -53,7 +53,9 @@ func copyToClipboard(link []byte) error {
 		case !ok:
 			fallthrough
 		default:
-			log.Error("you're on your own here")
+			log.Error("unknown session type, you're on your own here",
+				"XDG_SESSION_TYPE", sessionType,
+			)
 		}
 	case "darwin":
 		exec.Command("echo", string(link), "|", "pbcopy").Start()
@@ -122,12 +124,19 @@ func UpdateTriage(m *model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		case key.Matches(msg, m.keys.Save):
 			log.Info("switching to tags")
 			m.appState = appStateTags
-			m.textarea.Focus()
+			m.textArea.Focus()
 
 		case key.Matches(msg, m.keys.Ingest):
 			log.Info("switching to ingest pick file")
+			m.cursor = 0
 			m.appState = appStateIngestPickFile
 			UpdateIngestPickFile(m, nil)
+
+		case key.Matches(msg, m.keys.Export):
+			log.Info("switching to export")
+			m.cursor = 0
+			m.appState = appStateExportSelectFormat
+			UpdateExport(m, nil)
 
 		case key.Matches(msg, m.keys.Welcome):
 			log.Info("switching to welcome")
@@ -215,6 +224,8 @@ func UpdateIngestPickFile(m *model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.selectedFile = path
 		log.Info("switching to ingest pick format")
 		m.appState = appStateIngestPickFormat
+		// resetting cursor since it's reused for import and export
+		m.cursor = 0
 	}
 
 	return m, cmd
@@ -233,7 +244,7 @@ func UpdateIngestPickFormat(m *model, msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.cursor--
 			}
 		case "down", "j":
-			if m.cursor < len(m.formats)-1 {
+			if m.cursor < len(m.importFormats)-1 {
 				m.cursor++
 			}
 		case "enter", "space":
@@ -266,6 +277,73 @@ func UpdateIngestPickFormat(m *model, msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	return m, nil
 }
+func UpdateExportPickFormat(m *model, msg tea.Msg) (tea.Model, tea.Cmd) {
+
+	switch msg := msg.(type) {
+
+	case tea.KeyPressMsg:
+		switch msg.String() {
+		case "esc":
+			log.Info("switching to triage")
+			m.appState = appStateTriage
+		case "up", "k":
+			if m.cursor > 0 {
+				m.cursor--
+			}
+		case "down", "j":
+			if m.cursor < len(m.exportFormats)-1 {
+				m.cursor++
+			}
+		case "enter", "space":
+			// m.cursor has the same int value as the format iota
+			switch ExportFormatType(m.cursor) {
+			case MarkdownExportFormat:
+				m.textInput.Placeholder = "export directory"
+				m.appState = appStateExportMarkdown
+			case BookmarkExportFormat:
+				m.textInput.Placeholder = "export filename"
+				m.appState = appStateExportBookmarks
+			}
+
+		case "ctrl+c", "q":
+			return m, tea.Quit
+		}
+	}
+
+	return m, nil
+}
+
+// unified function for appStateExportMarkdown and appStateExportBookmarks
+func UpdateExport(m *model, msg tea.Msg) (tea.Model, tea.Cmd) {
+	m.textInput.Focus()
+	var cmd tea.Cmd
+
+	switch msg := msg.(type) {
+	case tea.KeyPressMsg:
+		switch msg.String() {
+		case "esc":
+			m.textInput.Blur()
+			m.appState = appStateTriage
+			UpdateTriage(m, nil)
+		case "enter":
+			switch m.appState {
+			case appStateExportMarkdown:
+				saveLinksToMarkdown(m, m.textInput.Value())
+			case appStateExportBookmarks:
+				saveLinksToBookmarkFile(m, m.textInput.Value())
+			default:
+				log.Error("somehow got into UpdateExport with the wrong state",
+					"appState", m.appState)
+			}
+			m.textInput.Blur()
+			m.appState = appStateTriage
+			UpdateTriage(m, nil)
+		}
+	}
+
+	m.textInput, cmd = m.textInput.Update(msg)
+	return m, cmd
+}
 
 func tagLink(m *model, resolution linkreader.LinkResolution, tags string) error {
 	err := m.conn.MarkLinkById(m.id, resolution)
@@ -294,13 +372,13 @@ func UpdateTags(m *model, msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "esc":
-			if m.textarea.Focused() {
-				m.textarea.Blur()
-				err := tagLink(m, linkreader.LinkSaved, m.textarea.Value())
+			if m.textArea.Focused() {
+				m.textArea.Blur()
+				err := tagLink(m, linkreader.LinkSaved, m.textArea.Value())
 				if err != nil {
 					// fuck
 				}
-				m.textarea.SetValue("")
+				m.textArea.SetValue("")
 
 				log.Info("switching to triage")
 				m.appState = appStateTriage
@@ -311,8 +389,8 @@ func UpdateTags(m *model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c":
 			return m, tea.Quit
 		default:
-			if !m.textarea.Focused() {
-				cmd = m.textarea.Focus()
+			if !m.textArea.Focused() {
+				cmd = m.textArea.Focus()
 				cmds = append(cmds, cmd)
 			}
 		}
@@ -323,7 +401,7 @@ func UpdateTags(m *model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	m.textarea, cmd = m.textarea.Update(msg)
+	m.textArea, cmd = m.textArea.Update(msg)
 	cmds = append(cmds, cmd)
 	return m, tea.Batch(cmds...)
 }

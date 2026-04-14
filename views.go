@@ -27,6 +27,7 @@ func getStatusString(stats linkreader.DatabaseStats, width int) string {
 		stats.Saved,
 		stats.Snoozed,
 	)
+	// culling
 	if len(statString) > width {
 		statString = fmt.Sprintf("U: %v, D: %v, S: %v, P: %v",
 			stats.Unprocessed,
@@ -113,7 +114,6 @@ func ViewIngestPickFile(m *model) tea.View {
 		Render(getCulledString(string(m.link.GetHREF()), m.sizes.topCellWidth))
 	display := lipgloss.JoinVertical(lipgloss.Left, nameView, linkView)
 
-	// log.Debug(m.filepicker.Height())
 	filepickerView := "Pick a file to ingest:\n" + m.filepicker.View()
 
 	middleCellStyle = middleCellStyle.Width(m.sizes.dimensions[0])
@@ -138,8 +138,8 @@ func ViewIngestPickFormat(m *model) tea.View {
 		Render(getCulledString(string(m.link.GetHREF()), m.sizes.topCellWidth))
 	display := lipgloss.JoinVertical(lipgloss.Left, nameView, linkView)
 
-	formatPickerView := "Pick a format:\n"
-	for i, format := range m.formats {
+	formatPickerView := "Pick a import format:\n"
+	for i, format := range m.importFormats {
 		cursor := "  "
 		if m.cursor == i {
 			cursor = "> "
@@ -166,6 +166,76 @@ func ViewIngestPickFormat(m *model) tea.View {
 	return view
 }
 
+func ViewExportPickFormat(m *model) tea.View {
+	nameView := nameStyle.Width(m.sizes.topCellWidth).
+		Render(getCulledString(string(m.link.GetName()), m.sizes.topCellWidth))
+	linkView := linkStyle.Width(m.sizes.topCellWidth).
+		Render(getCulledString(string(m.link.GetHREF()), m.sizes.topCellWidth))
+	display := lipgloss.JoinVertical(lipgloss.Left, nameView, linkView)
+
+	formatPickerView := "Pick an export format:\n"
+	for i, format := range m.exportFormats {
+		cursor := "  "
+		if m.cursor == i {
+			cursor = "> "
+		}
+		formatPickerView += cursor
+		if m.cursor == i {
+			format = formatPickerStyle.Render(format)
+		}
+		formatPickerView += format + "\n"
+	}
+	middleCellStyle = middleCellStyle.Width(m.sizes.dimensions[0])
+	middleCellStyle = middleCellStyle.Height(m.sizes.middleCellHeight + 1)
+
+	statsView := getStatusString(*m.stats, m.sizes.bottomCellWidth)
+
+	view := tea.NewView(lipgloss.JoinVertical(
+		lipgloss.Left,
+		topCellStyle.Render(display),
+		middleCellStyle.Render(formatPickerView),
+		bottomCellStyle.Render(statsView),
+	))
+	view.AltScreen = true
+
+	return view
+}
+
+func ViewExport(m *model) tea.View {
+	nameView := nameStyle.Width(m.sizes.topCellWidth).
+		Render(getCulledString(string(m.link.GetName()), m.sizes.topCellWidth))
+	linkView := linkStyle.Width(m.sizes.topCellWidth).
+		Render(getCulledString(string(m.link.GetHREF()), m.sizes.topCellWidth))
+	display := lipgloss.JoinVertical(lipgloss.Left, nameView, linkView)
+
+	// idfk why -3
+	// 2 for "> " i guess, but why tf 3??
+	m.textInput.SetWidth(m.sizes.middleCellWidth - 3)
+
+	var c *tea.Cursor
+	if !m.textInput.VirtualCursor() {
+		c = m.textInput.Cursor()
+		c.X += 1
+		c.Y += 4
+	}
+	textInputView := m.textInput.View()
+
+	statsView := getStatusString(*m.stats, m.sizes.bottomCellWidth)
+
+	middleCellStyle = middleCellStyle.Height(m.sizes.middleCellHeight + 1)
+
+	view := tea.NewView(lipgloss.JoinVertical(
+		lipgloss.Left,
+		topCellStyle.Render(display),
+		middleCellStyle.Render(textInputView),
+		bottomCellStyle.Render(statsView),
+	))
+	view.AltScreen = true
+	view.Cursor = c
+
+	return view
+}
+
 func ViewTags(m *model) tea.View {
 	nameView := nameStyle.Width(m.sizes.topCellWidth).
 		Render(getCulledString(string(m.link.GetName()), m.sizes.topCellWidth))
@@ -173,18 +243,18 @@ func ViewTags(m *model) tea.View {
 		Render(getCulledString(string(m.link.GetHREF()), m.sizes.topCellWidth))
 	display := lipgloss.JoinVertical(lipgloss.Left, nameView, linkView)
 
-	m.textarea.SetStyles(tagTextAreaStyle)
-	m.textarea.SetWidth(m.sizes.middleCellWidth)
-	m.textarea.SetHeight(m.sizes.middleCellHeight)
+	m.textArea.SetStyles(tagTextAreaStyle)
+	m.textArea.SetWidth(m.sizes.middleCellWidth)
+	m.textArea.SetHeight(m.sizes.middleCellHeight)
 	var c *tea.Cursor
-	if !m.textarea.VirtualCursor() {
-		c = m.textarea.Cursor()
+	if !m.textArea.VirtualCursor() {
+		c = m.textArea.Cursor()
 
 		// Set the offset of the cursor based on the position of the textarea
-		c.Y += 4
 		c.X += 1
+		c.Y += 4
 	}
-	textareaView := m.textarea.View()
+	textareaView := m.textArea.View()
 
 	statsView := getStatusString(*m.stats, m.sizes.bottomCellWidth)
 

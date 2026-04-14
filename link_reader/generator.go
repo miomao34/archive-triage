@@ -16,9 +16,9 @@ import (
 type LinkFileFormatType int
 
 const (
-	ExtensionExportFormat        LinkFileFormatType = iota
-	BookmarkExportFormat         LinkFileFormatType = iota
-	FirefoxShareTabsExportFormat LinkFileFormatType = iota
+	ExtensionImportFormat        LinkFileFormatType = iota
+	BookmarkImportFormat         LinkFileFormatType = iota
+	FirefoxShareTabsImportFormat LinkFileFormatType = iota
 )
 
 type Link struct {
@@ -72,19 +72,19 @@ func (lg *LinkGenerator) ReadBookmarksFile(filename string, format LinkFileForma
 	lg.ReturnChannel = make(chan Linker, 2)
 	lg.formatType = format
 	switch format {
-	case BookmarkExportFormat:
+	case BookmarkImportFormat:
 		lg.pattern, err = regexp.Compile(`(?ismU)<\s*a\s+.*href\s*=\s*\"(?<href>.*)\".*>(?<name>.*)<\s*/\s*a\s*>`)
 		if err != nil {
 			os.Exit(-1)
 		}
-	case ExtensionExportFormat:
+	case ExtensionImportFormat:
 		// bg.pattern, err = regexp.Compile(`(?ismU)^(?<name>.*?)$\n^(?<href>http[s]*://.*?)$`)
 		lg.pattern, err = regexp.Compile(`(?ismU)^(?<name>[^\n]*)$\n^(?<href>http[s]*://[^\n]*)\n$`)
 		// lg.pattern, err = regexp.Compile(`(?ismU)^(?<name>.*)\n$^(?<href>http[s]*://[^\n]*)\n$`)
 		if err != nil {
 			os.Exit(-1)
 		}
-	case FirefoxShareTabsExportFormat:
+	case FirefoxShareTabsImportFormat:
 		// bg.pattern, err = regexp.Compile(`(?ismU)^(?<name>.*?)$\n^(?<href>http[s]*://.*?)$`)
 		lg.pattern, err = regexp.Compile(`(?ismU)^(?<href>http[s]*://[^\n]*)\n\n$`)
 		// lg.pattern, err = regexp.Compile(`(?ismU)^(?<name>.*)\n$^(?<href>http[s]*://[^\n]*)\n$`)

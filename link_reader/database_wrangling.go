@@ -163,6 +163,48 @@ func (conn *DatabaseConnector) GetUnresolvedLink() (int, Linker, error) {
 	return id, link, nil
 }
 
+func (conn *DatabaseConnector) GetAllSavedLinks() ([]int, []Linker, error) {
+	tx, err := conn.db.Begin()
+	if err != nil {
+		return nil, nil, err
+	}
+	defer tx.Commit()
+
+	query, err := tx.Prepare("SELECT id, name, link FROM links WHERE resolution = ?;")
+	if err != nil {
+		return nil, nil, err
+	}
+	defer query.Close()
+
+	rows, err := query.Query(LinkSaved)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer rows.Close()
+
+	ids := make([]int, 0)
+	results := make([]Linker, 0)
+
+	for rows.Next() {
+		var id int
+		result := Link{}
+
+		err = rows.Scan(&id, &(result.name), &(result.href))
+		if err != nil {
+			return nil, nil, err
+		}
+
+		ids = append(ids, id)
+		results = append(results, result)
+	}
+	err = rows.Err()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return ids, results, nil
+}
+
 func (conn *DatabaseConnector) ResetSnoozedLinks() error {
 	tx, err := conn.db.Begin()
 	if err != nil {
@@ -368,7 +410,44 @@ func (conn *DatabaseConnector) UntagLink(link_id int) error {
 
 	return nil
 }
+func (conn *DatabaseConnector) GetLinkTags(linkID int) ([]string, error) {
+	tx, err := conn.db.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Commit()
 
+	query, err := tx.Prepare("SELECT tags_list.name FROM tags LEFT JOIN tags_list on tags.tag_id = tags_list.id WHERE tags.link_id = ?")
+	if err != nil {
+		return nil, err
+	}
+	defer query.Close()
+
+	rows, err := query.Query(linkID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	results := make([]string, 0)
+
+	for rows.Next() {
+		var tag string
+
+		err = rows.Scan(&tag)
+		if err != nil {
+			return nil, err
+		}
+
+		results = append(results, tag)
+	}
+	err = rows.Err()
+	if err != nil {
+		return nil, err
+	}
+
+	return results, nil
+}
 func (conn *DatabaseConnector) MarkLinkSource(link_id int, source string) error {
 	// log.Debug("trying to apply a tag", "tag_name", tag_name)
 	tx, err := conn.db.Begin()

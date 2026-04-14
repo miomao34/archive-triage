@@ -9,21 +9,21 @@ what should this app do:
         - [x] make the request
         - [x] cover edge cases - when the db file is empty it should prompt to ingest
       - [ ] plan out the lifetime of a link, how it looks (does it need id inside of the structure?), how it changes on app actions, how context of dupes works, some better sql queries and maybe better work with the sqlite.
-    - [ ] make ingestion menu
+    - [x] make ingestion menu
       - [x] file picker (this darn thang drank a liter of my blood)
       - [x] format selector - select format from a list and begin ingestion
     - [x] link name
     - [x] link href
     - [ ] get duplicates, with context
       - [x] partially done, duplicates are getting got, but the context only works if deleted links are also present in the db - returning to this after ingestion
-    - [ ] paginate duplicates with a paginator
+    - [x] paginate duplicates with a paginator
     - [ ] help text
     - [ ] stretch goal: basic text from the link
   - [ ] stretch goal - add N most similar links (maybe if prompted), similar either in name or in link 
 
   - [ ] if prompted, add context (forward and backward bookmarks)
-  - [ ] if snooze, append that to the end of the list, and maybe mark as "snoozed"
-  - [ ] if discard, just plain delete them from the db/list
-  - [ ] if save, then prompt the link for editing, tags and meta - name, maybe save location, maybe smth else
+  - [x] if snooze, append that to the end of the list, and maybe mark as "snoozed"
+  - [x] if discard, just plain delete them from the db/list
+  - [x] if save, then prompt the link for editing, tags and meta - name, maybe save location, maybe smth else
 - [ ] apply auto-generated meta
   - [ ] stretch goal/advanced task - if file/pic, then 
